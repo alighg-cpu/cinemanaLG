@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>سينمانا</title>
+  <style>
+    body { margin:0; padding:0; background:#000; color:#fff; font-family:Tahoma,Arial,sans-serif; overflow:hidden; height:100vh; }
+    #header { background:#111; padding:20px; font-size:32px; text-align:center; }
+    #search { width:70%; max-width:800px; padding:18px; font-size:24px; margin:30px auto; display:block; text-align:center; border-radius:10px; border:2px solid #444; background:#222; color:#fff; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(240px,1fr)); gap:25px; padding:0 30px 50px; }
+    .card { background:#1a1a1a; border-radius:12px; overflow:hidden; cursor:pointer; transition:transform 0.2s, box-shadow 0.2s; }
+    .card:hover, .card:focus { transform:scale(1.05); box-shadow:0 0 25px #e50914; outline:none; }
+    .card img { width:100%; height:340px; object-fit:cover; }
+    .card p { margin:12px; font-size:20px; text-align:center; height:60px; overflow:hidden; }
+    #details, #player { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:10; padding:40px; overflow:auto; }
+    video { width:100%; height:90%; }
+    button { padding:14px 28px; font-size:20px; margin:10px; background:#e50914; color:#fff; border:none; border-radius:8px; cursor:pointer; }
+    .close { position:absolute; top:20px; right:40px; font-size:48px; cursor:pointer; color:#fff; }
+  </style>
+</head>
+<body>
+  <div id="header">سينمانا - LG TV</div>
+  <input type="text" id="search" placeholder="ابحث عن فيلم / مسلسل..." onkeypress="if(event.key==='Enter') search()">
+
+  <div class="grid" id="results"></div>
+
+  <div id="details">
+    <span class="close" onclick="closeDetails()">✕</span>
+    <div id="detailContent"></div>
+  </div>
+
+  <div id="player">
+    <span class="close" onclick="closePlayer()">✕</span>
+    <video id="video" controls autoplay></video>
+  </div>
+
+  <script>
+    const BASE = "https://cinemana.shabakaty.com/api/android/";
+    const UA = "Mozilla/5.0 (Linux; Android 12; SM-G998B Build/SP1A.210812.016) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/100.0.4896.127 Mobile Safari/537.36";
+
+    async function fetchAPI(endpoint) {
+      try {
+        const res = await fetch(BASE + endpoint, {
+          headers: { "User-Agent": UA, "Accept": "application/json" }
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+      } catch (err) {
+        console.error(err);
+        alert("خطأ في الاتصال بالـ API: " + err.message);
+        return [];
+      }
+    }
+
+    async function search() {
+      const q = document.getElementById("search").value.trim();
+      if (!q) return alert("أدخل كلمة بحث");
+      
+      const data = await fetchAPI(`AdvancedSearch?videoTitle=${encodeURIComponent(q)}&Type=movie&Page=1`);
+      renderResults(data);
+    }
+
+    function renderResults(items) {
+      const grid = document.getElementById("results");
+      grid.innerHTML = "";
+      if (!items.length) return grid.innerHTML = "<p style='text-align:center;font-size:28px;'>لا توجد نتائج</p>";
+      
+      items.forEach(item => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.tabIndex = 0;
+        card.innerHTML = `
+          <img src="${item.imgThumbObjUrl || 'https://via.placeholder.com/240x340?text=لا+صورة'}" alt="">
+          <p>${item.en_title || item.title || "غير معروف"}</p>
+        `;
+        card.onclick = () => showDetails(item.nb);
+        card.onkeydown = e => { if (e.key === "Enter") showDetails(item.nb); };
+        grid.appendChild(card);
+      });
+    }
+
+    async function showDetails(id) {
+      const info = await fetchAPI(`allVideoInfo/id/${id}`);
+      const streams = await fetchAPI(`transcoddedFiles/id/${id}`);
+
+      let html = `
+        <h1>${info.en_title || info.title}</h1>
+        <img src="${info.imgObjUrl || ''}" style="max-width:320px; float:left; margin:0 30px 20px 0; border-radius:10px;">
+        <p><b>السنة:</b> ${info.year || 'غير معروف'}</p>
+        <p>${info.en_content || info.content || ''}</p>
+        <h2>الجودات المتوفرة</h2>
+      `;
+
+      if (streams && streams.length) {
+        streams.forEach(v => {
+          html += `<button onclick="play('\( {v.videoUrl}', ' \){info.en_title}')">${v.resolution || 'جودة'}</button>`;
+        });
+      } else {
+        html += "<p>لا توجد روابط تشغيل متاحة حاليًا</p>";
+      }
+
+      document.getElementById("detailContent").innerHTML = html;
+      document.getElementById("details").style.display = "block";
+    }
+
+    function play(url, title) {
+      closeDetails();
+      const video = document.getElementById("video");
+      video.src = url;
+      document.getElementById("player").style.display = "block";
+      video.play().catch(e => alert("خطأ في التشغيل: " + e.message));
+    }
+
+    function closeDetails() { document.getElementById("details").style.display = "none"; }
+    function closePlayer() {
+      const video = document.getElementById("video");
+      video.pause();
+      video.src = "";
+      document.getElementById("player").style.display = "none";
+    }
+
+    // تحميل افتراضي (أفلام جديدة أو شائعة)
+    window.onload = async () => {
+      const popular = await fetchAPI("AdvancedSearch?videoTitle=&Type=movie&Page=1");
+      renderResults(popular);
+    };
+
+    // دعم زر الرجوع / Escape
+    document.addEventListener("keydown", e => {
+      if (e.key === "Backspace" || e.key === "Escape") {
+        if (document.getElementById("player").style.display === "block") closePlayer();
+        else if (document.getElementById("details").style.display === "block") closeDetails();
+      }
+    });
+  </script>
+</body>
+</html>
