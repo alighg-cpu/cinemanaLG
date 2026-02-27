@@ -1,0 +1,12 @@
+{
+  "id": "com.cinemana.lgtv",
+  "title": "سينمانا LG",
+  "version": "1.0.0",
+  "vendor": "YourName",
+  "type": "web",
+  "main": "index.html",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "bgColor": "#000000",
+  "requiredPermissions": ["internet"]
+}
